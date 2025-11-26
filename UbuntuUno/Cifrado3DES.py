@@ -1,51 +1,25 @@
-from scapy.all import *
-from Crypto.Cipher import DES3
+import subprocess
 import base64
 
-# ---------------------------
-#  CIFRADO CESAR
-# ---------------------------
-def cifrado_cesar(texto, desplazamiento):
-    resultado = ""
-    for c in texto:
-        if c.isalpha():
-            base = ord('A') if c.isupper() else ord('a')
-            resultado += chr((ord(c) - base + desplazamiento) % 26 + base)
-        else:
-            resultado += c
-    return resultado
+def cifrar_3des_openssl(texto, key):
+    # Guardar mensaje en archivo temporal
+    with open("msg.txt", "w") as f:
+        f.write(texto)
 
-# ---------------------------
-#  CIFRADO 3DES
-# ---------------------------
-def cifrar_3des(mensaje, key):
-    cipher = DES3.new(key, DES3.MODE_ECB)
-    padded = mensaje + (8 - len(mensaje) % 8) * " "
-    encrypted = cipher.encrypt(padded.encode())
-    return base64.b64encode(encrypted).decode()
+    # Ejecutar openssl 3DES en modo ECB
+    subprocess.run([
+        "openssl", "enc", "-des-ede3", "-in", "msg.txt",
+        "-out", "msg.enc", "-K", key
+    ])
 
-# ---------------------------
-# ENVIAR PAQUETES L2
-# ---------------------------
+    # Leer archivo cifrado y convertirlo a base64 para enviarlo fácil
+    with open("msg.enc", "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-dest_mac = "AA:BB:CC:DD:EE:FF"  # PON LA MAC DE Ubuntu2 !!
-iface = "eth0"  # UTM normalmente usa enp0s3 o eth0 → revisa con: ip a
+# USO:
+key = "0123456789ABCDEFFEDCBA9876543210"  # 24 bytes (48 hex chars)
+mensaje = "hola mundo"
 
-msg = "hola mundo"
-cesar = cifrado_cesar(msg, 3)
-
-key = b"1234567890ABCDEFGHIJ"
-tresdes = cifrar_3des(msg, key)
-
-print("César:", cesar)
-print("3DES:", tresdes)
-
-# Paquete 1: Cesar
-paquete1 = Ether(dst=dest_mac) / Raw(load=cesar.encode())
-sendp(paquete1, iface=iface)
-
-# Paquete 2: 3DES
-paquete2 = Ether(dst=dest_mac) / Raw(load=tresdes.encode())
-sendp(paquete2, iface=iface)
-
-print("Paquetes enviados.")
+cifrado = cifrar_3des_openssl(mensaje, key)
+print("Cifrado 3DES:", cifrado)
